@@ -103,7 +103,9 @@ def check_filing(
                 cell_facts = row_facts[column] if column < len(row_facts) else []
                 if not cell_facts and not _is_amount(text):
                     continue
-                period, year_only = _period_for(grid, row_index, column, data_at)
+                period, year_only, alternates = _period_for(
+                    grid, row_index, column, data_at
+                )
                 if _is_blank(text) and not any(
                     parse_display(fact.get("text") or "") for fact in cell_facts
                 ):
@@ -114,6 +116,7 @@ def check_filing(
                     cell_facts,
                     period,
                     year_only,
+                    alternates,
                     contexts,
                     facts,
                     accession=accession,
@@ -152,10 +155,16 @@ def check_filing(
 def match_rates(
     checks: list[CellCheck],
 ) -> dict[str, dict[str, dict[str, float | int]]]:
-    """Absolute match rate by units_source and by section_role."""
+    """Absolute match rate for cells that have an XBRL tag.
+
+    Untagged cells are counted by section_role and are not in the rates.
+    """
+    tagged = [check for check in checks if check.tag]
+    untagged = [check for check in checks if not check.tag]
     return {
-        "by_units_source": _rate(checks, "units_source"),
-        "by_section_role": _rate(checks, "section_role"),
+        "by_units_source": _rate(tagged, "units_source"),
+        "by_section_role": _rate(tagged, "section_role"),
+        "untagged_by_section_role": _count(untagged, "section_role"),
     }
 
 
@@ -164,6 +173,7 @@ def _compare_cell(
     cell_facts: list[dict],
     period,
     year_only: int | None,
+    alternates: tuple,
     contexts: dict[str, Context],
     facts: list[Fact],
     *,
@@ -181,7 +191,7 @@ def _compare_cell(
         context = contexts.get(fact.get("context_ref") or "")
         context_end = context.period_end if context else None
         period_end = context_end
-        if not _period_matches(period, year_only, context_end):
+        if not _period_matches(period, year_only, alternates, context_end):
             expected = context_end or ""
             parsed = (
                 period.isoformat()
@@ -266,38 +276,73 @@ def _expected(
 
 
 def _period_for(grid: list[list[str]], row_index: int, column: int, data_at: int):
-    """Nearest period date for one cell.
+    """Period candidates for one cell.
 
-    A date in the same column wins, so a later block in the table does not keep
-    the first header. Otherwise the column header is read as a whole, because
-    filers split "December 31," and "2025" across two rows. A year alone, such
-    as "2025", is returned when the header has no month.
+    A date in the same column is that column's period. A rollforward activity
+    row has no date of its own: the closing date is the next stub below, and an
+    activity column takes the next dated header to the right. A year alone,
+    such as "2025", is used when the header has no month.
     """
+    column_date = None
     for index in range(row_index, -1, -1):
         cell = grid[index][column] if column < len(grid[index]) else ""
-        found = header_date([cell])
-        if found is not None:
-            return found, None
+        column_date = header_date([cell])
+        if column_date is not None:
+            break
     header_cells = [
         grid[i][column] for i in range(min(data_at, len(grid))) if column < len(grid[i])
     ]
-    found = header_date(header_cells)
-    if found is not None:
-        return found, None
+    if column_date is None:
+        column_date = header_date(header_cells)
+    if column_date is not None:
+        return column_date, None, ()
+    above, below = _stub_dates(grid, row_index)
+    alternates = tuple(
+        item
+        for item in (above, below, _right_header_date(grid, column, data_at))
+        if item
+    )
+    return None, _header_year(header_cells), alternates
+
+
+def _stub_dates(grid: list[list[str]], row_index: int):
+    above = None
     for index in range(row_index, -1, -1):
-        label = grid[index][0] if grid[index] else ""
-        found = header_date([label])
+        above = header_date([grid[index][0]] if grid[index] else [])
+        if above is not None:
+            break
+    below = None
+    for index in range(row_index + 1, len(grid)):
+        below = header_date([grid[index][0]] if grid[index] else [])
+        if below is not None:
+            break
+    return above, below
+
+
+def _right_header_date(grid: list[list[str]], column: int, data_at: int):
+    width = max((len(row) for row in grid), default=0)
+    for next_column in range(column + 1, width):
+        cells = [
+            grid[index][next_column]
+            for index in range(min(data_at, len(grid)))
+            if next_column < len(grid[index])
+        ]
+        found = header_date(cells)
         if found is not None:
-            return found, None
-    return None, _header_year(header_cells)
+            return found
+    return None
 
 
-def _period_matches(period, year_only: int | None, context_end: str | None) -> bool:
+def _period_matches(
+    period, year_only: int | None, alternates: tuple, context_end: str | None
+) -> bool:
     if context_end is None:
         return False
     if period is not None:
         return period.isoformat() == context_end
-    return year_only is not None and context_end.startswith(f"{year_only:04d}-")
+    if year_only is not None and context_end.startswith(f"{year_only:04d}-"):
+        return True
+    return any(item.isoformat() == context_end for item in alternates)
 
 
 def _header_year(cells: list[str]) -> int | None:
@@ -340,6 +385,13 @@ def _format(value: Decimal) -> str:
 
 def _sign_label(negative: bool) -> str:
     return "negative" if negative else "positive"
+
+
+def _count(checks: list[CellCheck], field: str) -> dict[str, dict[str, int]]:
+    groups: dict[str, int] = defaultdict(int)
+    for check in checks:
+        groups[str(getattr(check, field) or "none")] += 1
+    return {key: {"untagged": groups[key]} for key in sorted(groups)}
 
 
 def _rate(checks: list[CellCheck], field: str) -> dict[str, dict[str, float | int]]:

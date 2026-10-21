@@ -58,6 +58,7 @@
 - **Fix:** Those cells are reported as `missing tag`. The checker does not copy a tag from another table.
 - **Verification:** `data/xbrl/mismatches.jsonl` has 251 `mdna` rows and 4 `notes` rows with cause `missing tag`.
 - **Prevention:** Question generation can use the tagged statement cell for these amounts.
+- **Follow-up:** On 2026-10-21 these 255 cells are reported as untagged counts, not as failures in the match rate. MD&A has 251. Notes have 4.
 - **Status:** recorded
 
 ## P-007: Some note columns do not print the fact's period end (Step 3)
@@ -65,7 +66,61 @@
 - **Date:** 2026-10-11
 - **Symptom:** 17 cells are `header-period parse failure` after the header reader accepts a split date, a later date in the same column, and a year-only header.
 - **Root cause:** Fourteen are AMD goodwill rollforwards. `AMD-2023-00762` has 12 and `AMD-2025-00729` has 2. An activity column is labeled `Acquisitions`, or the amount sits between two balance dates, and the fact's end is the closing date rather than a date printed in that column. The other three are Qualcomm `IncomeLossFromContinuingOperations` in the oldest income-statement column: `QCOM-2025-00660` `r17c3` context end `2023-06-25` under header `2023-09-24`, and the same column in `QCOM-2024-00699` (`2022-06-26` vs `2022-09-25`) and `QCOM-2023-00690` (`2021-06-27` vs `2021-09-26`).
-- **Fix:** These stay in the mismatch file. The checker does not invent a period for an acquisitions column, and it does not ignore the June context.
+- **Fix:** The fourteen AMD cells were a checker bug and are fixed in P-008. The three Qualcomm cells stay in the mismatch file. The June context is the one on the tag, and the checker does not replace it with the September header.
 - **Verification:** After the header changes, header failures fell from 1,160 to 17. Notes absolute match rate is 757/775.
 - **Prevention:** Tests cover a split `December 31,` / `2025` header, a second date lower in the column, and a year-only header.
+- **Follow-up:** Fourteen of these seventeen were a rollforward bug, fixed in P-008. The three Qualcomm cells are the filing's own context, not a parser bug.
+- **Status:** recorded
+
+## P-008: Rollforward activity cells were tied to the opening date (Step 3)
+
+- **Date:** 2026-10-21
+- **Symptom:** Fourteen note cells were `header-period parse failure`. The fact's end date was the closing balance, and the checker compared it with the opening date or with no date at all.
+- **Root cause:** In a goodwill rollforward, an activity row sits between two stub dates, and an activity column sits to the left of the closing-date header. The checker used only a date above the cell or in the same column. `Acquisitions` has no date of its own.
+- **Fix:** When the cell's own column has no date, the context end may match the next stub date below or the next dated header to the right. A date printed in the column still has to match exactly, so a disagreeing column header is unchanged.
+- **Verification:** After the fix, header-period failures are the three Qualcomm cells below. Tagged note cells match 771/771. `tests/test_xbrl.py` covers an activity row, an activity column, and a column date that still disagrees.
+- **The fourteen cells that were the bug:**
+
+| table id | cell | expected | parsed before the fix | cause |
+|---|---|---|---|---|
+| AMD-2025-00729 | r4c1 | 2025-12-27 | 2024-12-28 | header-period parse failure |
+| AMD-2025-00729 | r4c6 | 2025-12-27 | 2024-12-28 | header-period parse failure |
+| AMD-2023-00762 | r3c3 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r4c2 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r4c3 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r6c2 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r6c3 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r6c5 | 2023-12-30 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r7c5 | 2023-12-30 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r8c3 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r9c3 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r9c5 | 2023-12-30 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r10c2 | 2022-12-31 | unparsed header | header-period parse failure |
+| AMD-2023-00762 | r10c5 | 2023-12-30 | unparsed header | header-period parse failure |
+
+- **The three financial-statement mismatches are a filer tagging quirk, recorded in P-009.** The parser copied the `contextRef` that is on the tag.
+
+- **The eighteen note mismatches before the fix** were the fourteen rows above plus these four. The four have no `ix:nonFraction` in the HTML. `(126)` and `(238)` are `ix:nonNumeric` text facts named `GoodwillChangeInGoodwillAllocationDescription`. `$1,143` and `$1,589` are plain text. They stay untagged and are not in the tagged match rate.
+
+| table id | cell | expected | parsed | cause |
+|---|---|---|---|---|
+| AMD-2025-00729 | r3c3 |  | (126) | missing tag |
+| AMD-2025-00729 | r3c4 |  | (238) | missing tag |
+| AMD-2023-00731 | r2c1 |  | $1,143 | missing tag |
+| AMD-2023-00731 | r9c1 |  | $1,589 | missing tag |
+
+- **Prevention:** A column that already prints a date cannot be rescued by a neighboring date.
+- **Status:** resolved
+
+## P-009: Qualcomm continuing-operations tag uses a June context (Step 3)
+
+- **Date:** 2026-10-21
+- **Symptom:** Three income-statement cells fail the header-period check. The column is a September year end. The fact's context ends in June of that same fiscal year. These are the only tagged absolute mismatches in the financial statements.
+- **Root cause:** The filer put a June `contextRef` on `us-gaap:IncomeLossFromContinuingOperations` in the oldest column. Neighboring rows in that column use the September context. The parser stored the tag that is inside the cell. The row label on all three is `Income from continuing operations`.
+- **QCOM-2025-00660 r17c3**, column header `September 24, 2023`, cell text `7,339`. Context `c-11` is 2022-09-26 to 2023-06-25. Tag: `<ix:nonFraction unitRef="usd" contextRef="c-11" decimals="-6" name="us-gaap:IncomeLossFromContinuingOperations" format="ixt:num-dot-decimal" scale="6" id="f-173">7,339</ix:nonFraction>`.
+- **QCOM-2024-00699 r17c3**, column header `September 25, 2022`, cell text `12,986`. Context `c-13` is 2021-09-27 to 2022-06-26. Tag: `<ix:nonFraction unitRef="usd" contextRef="c-13" decimals="-6" name="us-gaap:IncomeLossFromContinuingOperations" format="ixt:num-dot-decimal" scale="6" id="f-167">12,986</ix:nonFraction>`.
+- **QCOM-2023-00690 r17c3**, column header `September 26, 2021`, cell text `9,043`. Context `c-9` is 2020-09-28 to 2021-06-27. Tag: `<ix:nonFraction unitRef="usd" contextRef="c-9" decimals="-6" name="us-gaap:IncomeLossFromContinuingOperations" format="ixt:num-dot-decimal" scale="6" id="f-161">9,043</ix:nonFraction>`.
+- **Fix:** Leave the three mismatches. Do not rewrite the context to the column header. Company-facts stores the same concept with that June-ending context: 272 days, for example 2022-09-26 to 2023-06-25 with value `7339000000`, and again for 2021-09-27 to 2022-06-26 (`12986000000`) and 2020-09-28 to 2021-06-27 (`9043000000`). A full-year fact with the same value is also present. `us-gaap:IncomeLossFromContinuingOperations` must not be used as a metric without a period check.
+- **Verification:** The raw tag, the context dates, and the parsed cell agree with each other on all three filings.
+- **Prevention:** A printed column date that disagrees with `contextRef` stays a header-period failure. `test_a_printed_column_date_that_disagrees_stays_a_mismatch` locks that.
 - **Status:** recorded

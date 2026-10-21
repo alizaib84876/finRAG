@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 import yaml
@@ -41,6 +41,7 @@ class MetricRow:
     derived: bool
     comparative: bool
     reported_in_fiscal_year: int
+    fact_status: str = "reported"
 
 
 def load_tag_map(path: Path) -> list[MetricSpec]:
@@ -94,6 +95,31 @@ def build_metrics(
                 built[spec.name] = row
                 rows.append(row)
     return rows
+
+
+def label_metrics(rows: list[MetricRow]) -> list[MetricRow]:
+    """Mark each row reported, restated, derived, or alternate-tag.
+
+    Restated wins when the same period has more than one value. Derived is
+    next, then a later tag. Everything else was reported with the first tag.
+    """
+    changed = {
+        (item["ticker"], item["metric"], item["period_end"], item["period_start"])
+        for item in restatements(rows)
+    }
+    labeled: list[MetricRow] = []
+    for row in rows:
+        key = (row.ticker, row.metric, row.period_end, row.period_start)
+        if key in changed:
+            status = "restated"
+        elif row.derived:
+            status = "derived"
+        elif row.tag_rank is not None and row.tag_rank > 0:
+            status = "alternate-tag"
+        else:
+            status = "reported"
+        labeled.append(replace(row, fact_status=status))
+    return labeled
 
 
 def restatements(rows: list[MetricRow]) -> list[dict]:

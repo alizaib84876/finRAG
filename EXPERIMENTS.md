@@ -1,5 +1,32 @@
 # Experiments
 
+## 2026-10-21 tagged-cell match rates
+
+- **Commit:** uncommitted, parent `24d7e9e798d5`
+- **Config:** `configs/xbrl_tags.yaml`. Full-year durations are 350 to 380 days. Match rates use only cells that have an XBRL tag. Untagged cells are counted by `section_role` and are not in the denominator. Rollforward activity cells take the closing date when their own column has none. D-010 compares natural-positive answers on absolute value.
+- **Command:** `uv run finrag-xbrl`
+- **Results:** 3,231 numeric statement cells. 2,976 have a tag. 255 do not.
+
+Absolute match rate for tagged cells by `units_source`:
+
+| units_source | checked | matched | match rate |
+|---|---:|---:|---:|
+| caption | 109 | 109 | 1.0000 |
+| fallback | 155 | 155 | 1.0000 |
+| preceding | 979 | 976 | 0.9969 |
+| table_text | 1,733 | 1,733 | 1.0000 |
+
+Absolute match rate for tagged cells by `section_role`:
+
+| section_role | checked | matched | match rate |
+|---|---:|---:|---:|
+| financial_statements | 2,205 | 2,202 | 0.9986 |
+| notes | 771 | 771 | 1.0000 |
+
+Untagged cells, not in the rates above: `mdna` 251, `notes` 4. No untagged cells are in `financial_statements`.
+
+The three tagged mismatches are the Qualcomm continuing-operations cells in P-008. Sign mismatches remain 201 and are not in these rates. Metric rows are marked `reported` 358, `alternate-tag` 42, `derived` 9, `restated` 5.
+
 ## 2026-10-11 company-facts cell check
 
 - **Commit:** 72545e072eb64be609cdefbac87ff5e72b056757

@@ -4,12 +4,24 @@ import subprocess
 from decimal import Decimal
 from pathlib import Path
 
-from finrag.xbrl.check import CAUSE_MISSING, CAUSE_SCALE, CAUSE_SIGN, check_filing
+from finrag.xbrl.check import (
+    CAUSE_MISSING,
+    CAUSE_SCALE,
+    CAUSE_SIGN,
+    check_filing,
+    match_rates,
+)
 from finrag.xbrl.companyfacts import Fact, entity_fact
 from finrag.xbrl.contexts import Context, header_date, parse_contexts
 from finrag.xbrl.hand import sample_hand_check
-from finrag.xbrl.metrics import build_metrics, load_tag_map, restatements
-from finrag.xbrl.numbers import apply_scale, is_scale_factor, parse_display
+from finrag.xbrl.metrics import build_metrics, label_metrics, load_tag_map, restatements
+from finrag.xbrl.numbers import (
+    answer_values_match,
+    apply_scale,
+    is_natural_positive,
+    is_scale_factor,
+    parse_display,
+)
 from finrag.xbrl.periods import fiscal_label, is_full_year
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -317,6 +329,163 @@ def test_a_dash_is_not_a_missing_tag():
     assert mismatches == []
 
 
+def test_rollforward_activity_uses_the_closing_date():
+    contexts = {
+        "c-close": Context("c-close", "2024-12-29", "2025-12-27", None, ()),
+        "c-right": Context("c-right", "2021-12-26", "2022-12-31", None, ()),
+    }
+    down = {
+        "element_type": "table",
+        "id": "ROLL-ROW",
+        "heading_path": ["Goodwill"],
+        "text": "Goodwill rollforward",
+        "section_role": "notes",
+        "units_source": "table_text",
+        "grid": [
+            ["", "Data Center"],
+            ["December 28, 2024", "3,403"],
+            ["Acquisitions", "287"],
+            ["December 27, 2025", "3,690"],
+        ],
+        "facts": [
+            [[], []],
+            [[], [_ix("us-gaap:Goodwill", "c-close", "3,403")]],
+            [[], [_ix("us-gaap:GoodwillAcquiredDuringPeriod", "c-close", "287")]],
+            [[], [_ix("us-gaap:Goodwill", "c-close", "3,690")]],
+        ],
+    }
+    # The opening balance is a different instant. Give it its own context.
+    down["facts"][1][1] = [_ix("us-gaap:Goodwill", "c-open", "3,403")]
+    contexts["c-open"] = Context("c-open", None, None, "2024-12-28", ())
+    down["facts"][3][1] = [_ix("us-gaap:Goodwill", "c-end", "3,690")]
+    contexts["c-end"] = Context("c-end", None, None, "2025-12-27", ())
+    _checks, mismatches = check_filing(
+        [down], contexts, [], ticker="AMD", accession=ACCESSION
+    )
+    assert mismatches == []
+
+    across = {
+        "element_type": "table",
+        "id": "ROLL-COL",
+        "heading_path": ["Goodwill"],
+        "text": "Goodwill by column",
+        "section_role": "notes",
+        "units_source": "table_text",
+        "grid": [
+            ["", "December 25, 2021", "Acquisitions", "December 31, 2022"],
+            ["Xilinx", "—", "22,794", "—"],
+        ],
+        "facts": [
+            [[], [], [], []],
+            [
+                [],
+                [],
+                [_ix("us-gaap:GoodwillAcquiredDuringPeriod", "c-right", "22,794")],
+                [],
+            ],
+        ],
+    }
+    _checks, mismatches = check_filing(
+        [across], contexts, [], ticker="AMD", accession=ACCESSION
+    )
+    assert mismatches == []
+
+
+def test_a_printed_column_date_that_disagrees_stays_a_mismatch():
+    contexts = {"c-1": Context("c-1", "2022-09-26", "2023-06-25", None, ())}
+    element = {
+        "element_type": "table",
+        "id": "QCOM-1",
+        "heading_path": ["Consolidated Statements of Operations"],
+        "text": "Income from continuing operations",
+        "section_role": "financial_statements",
+        "units_source": "preceding",
+        "grid": [
+            ["", "September 24, 2023"],
+            ["Income from continuing operations", "7,339"],
+        ],
+        "facts": [
+            [[], []],
+            [[], [_ix("us-gaap:IncomeLossFromContinuingOperations", "c-1", "7,339")]],
+        ],
+    }
+    _checks, mismatches = check_filing(
+        [element], contexts, [], ticker="QCOM", accession=ACCESSION
+    )
+    assert [item.cause for item in mismatches] == ["header-period parse failure"]
+    assert mismatches[0].expected == "2023-06-25"
+    assert mismatches[0].parsed == "2023-09-24"
+
+
+def test_match_rates_leave_untagged_cells_out():
+    contexts = {"c-1": Context("c-1", "2025-01-27", "2026-01-25", None, ())}
+    element = {
+        "element_type": "table",
+        "id": "RATE-1",
+        "heading_path": ["Consolidated Statements of Income"],
+        "text": "Consolidated Statements of Income",
+        "section_role": "mdna",
+        "units_source": "table_text",
+        "grid": [
+            ["", "Jan 25, 2026"],
+            ["Revenue", "215,938"],
+            ["Reprint", "1,000"],
+        ],
+        "facts": [
+            [[], []],
+            [[], [_ix("us-gaap:Revenues", "c-1", "215,938")]],
+            [[], []],
+        ],
+    }
+    checks, _mismatches = check_filing(
+        [element], contexts, [], ticker="NVDA", accession=ACCESSION
+    )
+    rates = match_rates(checks)
+    assert rates["by_section_role"]["mdna"]["checked"] == 1
+    assert rates["by_section_role"]["mdna"]["matched"] == 1
+    assert rates["untagged_by_section_role"]["mdna"]["untagged"] == 1
+
+
+def test_natural_positive_answers_match_on_absolute_value():
+    assert is_natural_positive(259_000_000, None) is True
+    assert is_natural_positive(-5_000_000, "-") is False
+    assert answer_values_match(Decimal(259), Decimal(-259), natural_positive=True)
+    assert not answer_values_match(Decimal(-5), Decimal(5), natural_positive=False)
+
+
+def test_metric_labels_cover_restated_derived_and_alternate_tags():
+    specs = load_tag_map(ROOT / "configs" / "xbrl_tags.yaml")
+    later = ACCESSION
+    earlier = "0001045810-25-000023"
+    facts = [
+        _fact("us-gaap:Revenues", "2025-01-27", "2026-01-25", 100, later),
+        _fact("us-gaap:CostOfRevenue", "2025-01-27", "2026-01-25", 10, later),
+        _fact("us-gaap:Revenues", "2024-01-29", "2025-01-26", 40, later),
+        _fact("us-gaap:Revenues", "2024-01-29", "2025-01-26", 39, earlier),
+    ]
+    rows = []
+    for accession, end in ((later, "2026-01-25"), (earlier, "2025-01-26")):
+        rows.extend(
+            build_metrics(
+                facts,
+                specs,
+                ticker="NVDA",
+                cik="0001045810",
+                accession=accession,
+                period_end=end,
+            )
+        )
+    labeled = label_metrics(rows)
+    by_key = {
+        (row.accession_number, row.metric, row.period_end): row.fact_status
+        for row in labeled
+    }
+    assert by_key[(later, "revenue", "2025-01-26")] == "restated"
+    assert by_key[(earlier, "revenue", "2025-01-26")] == "restated"
+    assert by_key[(later, "gross_profit", "2026-01-25")] == "derived"
+    assert by_key[(later, "revenue", "2026-01-25")] == "alternate-tag"
+
+
 def test_contexts_keep_period_and_dimensions():
     html = """<?xml version="1.0"?>
     <html xmlns="http://www.w3.org/1999/xhtml"><body>
@@ -353,7 +522,7 @@ def test_hand_check_covers_companies_years_and_fallback():
         assert years >= {2024, 2025}
         assert sum(1 for row in drawn if row["ticker"] == ticker) >= 3
     assert sum(1 for row in drawn if row["units_source"] == "fallback") >= 5
-    assert any(row["tag_changed"] for row in drawn)
+    assert any(row["alternate_tag"] for row in drawn)
     assert any(row["derived"] for row in drawn)
     assert any(row["restated"] for row in drawn)
     assert all(row["status"] == "open" for row in drawn)
@@ -394,7 +563,7 @@ def _hand_row(ticker, year, metric, source, changed, derived, restated) -> dict:
         "element_id": f"{ticker}-{year}-{metric}",
         "cell": "r1c1",
         "units_source": source,
-        "tag_changed": changed,
+        "alternate_tag": changed,
         "derived": derived,
         "restated": restated,
         "status": "open",

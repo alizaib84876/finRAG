@@ -16,7 +16,13 @@ from finrag.xbrl.check import check_filing, match_rates
 from finrag.xbrl.companyfacts import companyfacts_url, load_companyfacts
 from finrag.xbrl.contexts import parse_contexts
 from finrag.xbrl.hand import fallback_rows, locate_rows, sample_hand_check
-from finrag.xbrl.metrics import MetricRow, build_metrics, load_tag_map, restatements
+from finrag.xbrl.metrics import (
+    MetricRow,
+    build_metrics,
+    label_metrics,
+    load_tag_map,
+    restatements,
+)
 
 HAND_SEED = 13
 
@@ -92,6 +98,7 @@ def main(argv: list[str] | None = None) -> int:
             if (row["element_id"], row["cell"]) not in occupied:
                 pool.append(row)
 
+    metric_rows = label_metrics(metric_rows)
     changed = restatements(metric_rows)
     restated_keys = {
         (item["ticker"], item["metric"], item["period_end"]) for item in changed
@@ -120,7 +127,7 @@ def main(argv: list[str] | None = None) -> int:
         "mismatches": len(mismatches),
         "mismatch_causes": dict(Counter(item.cause for item in mismatches)),
         "match_rates": rates,
-        "tag_changes": [
+        "alternate_tags": [
             _metric_dict(row)
             for row in metric_rows
             if row.tag_rank is not None and row.tag_rank > 0
@@ -199,6 +206,7 @@ def _metric_dict(row: MetricRow) -> dict:
         "value": row.value,
         "unit": row.unit,
         "derived": row.derived,
+        "fact_status": row.fact_status,
         "comparative": row.comparative,
         "reported_in_fiscal_year": row.reported_in_fiscal_year,
     }

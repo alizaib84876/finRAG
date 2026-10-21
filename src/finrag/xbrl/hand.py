@@ -103,7 +103,7 @@ def fallback_rows(
                 "units_source": "fallback",
                 "tag": check.tag,
                 "tag_rank": None,
-                "tag_changed": False,
+                "alternate_tag": False,
                 "derived": False,
                 "restated": False,
                 "comparative": False,
@@ -152,7 +152,7 @@ def sample_hand_check(
         add(row)
     seen_tags: set[tuple] = set()
     for row in rows:
-        if not row.get("tag_changed"):
+        if not row.get("alternate_tag"):
             continue
         key = (row["ticker"], row["metric"])
         if key in seen_tags:
@@ -243,7 +243,7 @@ def _record(
         "units_source": check.units_source if check else None,
         "tag": row.tag,
         "tag_rank": row.tag_rank,
-        "tag_changed": row.tag_rank is not None and row.tag_rank > 0,
+        "alternate_tag": row.tag_rank is not None and row.tag_rank > 0,
         "derived": row.derived,
         "restated": (row.ticker, row.metric, row.period_end) in restated,
         "comparative": row.comparative,

@@ -13,3 +13,5 @@ build/
 data/raw/
 data/parsed/
 data/xbrl/raw/
+
+.DS_Store

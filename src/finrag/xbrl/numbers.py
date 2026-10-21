@@ -39,6 +39,29 @@ def attribute_is_negative(sign: str | None) -> bool:
     return sign == "-"
 
 
+def is_natural_positive(company_value: int | Decimal | None, sign: str | None) -> bool:
+    """True when an answer for this concept is compared on absolute value.
+
+    A company-facts value of zero or more is natural-positive, per D-010.
+    With no company-facts value, a missing sign attribute means the same thing.
+    """
+    if company_value is not None:
+        return Decimal(company_value) >= 0
+    return not attribute_is_negative(sign)
+
+
+def answer_values_match(
+    expected: Decimal,
+    actual: Decimal,
+    *,
+    natural_positive: bool,
+) -> bool:
+    """Compare two answer amounts under D-010."""
+    if natural_positive:
+        return abs(expected) == abs(actual)
+    return expected == actual
+
+
 def is_rounding(parsed: Decimal, expected: Decimal, scale: int | None) -> bool:
     """True when the two raw amounts differ by at most half of one displayed unit."""
     if expected == 0:

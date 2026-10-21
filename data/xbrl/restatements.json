@@ -21,7 +21,8 @@
           "value": 2352000000,
           "tag": "us-gaap:SellingGeneralAndAdministrativeExpense"
         }
-      ]
+      ],
+      "note": "No explanation for this change was found in the FY2025 10-K (its reclassification footnote covers balance sheet lines only). The FY2024 10-K shows licensing gain separately, (48) and (34); the FY2025 income statement has no such line (2,783 - 48 = 2,735; 2,352 - 34 = 2,318), and total operating expenses are identical in both filings. Likely netted into marketing, general and administrative (inferred, not stated by AMD)."
     },
     {
       "ticker": "AMD",
@@ -39,7 +40,8 @@
           "value": 2783000000,
           "tag": "us-gaap:SellingGeneralAndAdministrativeExpense"
         }
-      ]
+      ],
+      "note": "No explanation for this change was found in the FY2025 10-K (its reclassification footnote covers balance sheet lines only). The FY2024 10-K shows licensing gain separately, (48) and (34); the FY2025 income statement has no such line (2,783 - 48 = 2,735; 2,352 - 34 = 2,318), and total operating expenses are identical in both filings. Likely netted into marketing, general and administrative (inferred, not stated by AMD)."
     }
   ]
 }

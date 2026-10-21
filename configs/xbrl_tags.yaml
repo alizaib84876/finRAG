@@ -1,4 +1,7 @@
-# First matching tag wins. A later tag is reported as a tag change.
+# First matching tag wins. A later tag is an alternate-tag on the metric row.
+# NVIDIA revenue, Qualcomm revenue, and AMD and Texas Instruments cost of
+# revenue use that alternate tag for every year in the corpus. Broadcom net
+# income uses ProfitLoss for every year on the FY2023 and FY2025 filings.
 # derive is used only when none of the tags are present for that period.
 metrics:
   - name: revenue
