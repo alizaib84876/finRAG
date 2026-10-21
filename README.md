@@ -44,4 +44,8 @@ uv run finrag-corpus rebuild
 
 `period_end` is the SEC report date. The fiscal year label is the calendar year of that date. A January period end is marked ambiguous in the dry-run and in the manifest.
 
+`finrag-parse` reads each 10-K as HTML and writes `data/parsed/{ticker}/{accession}.jsonl`. An element is a heading, a paragraph, or a table. Tables keep their rows, a markdown copy, and a nearby units line such as "in millions". Parsed files are gitignored with the raw filings.
+
+`finrag-xbrl` reads SEC company-facts for the manifest companies and checks income-statement, balance-sheet, and segment cells against the inline facts. Raw company-facts JSON stays in `data/xbrl/raw/` and is gitignored. The committed outputs are the metrics table, the snapshot hashes, the mismatch list, and the open hand-check file.
+
 Set `SEC_USER_AGENT` in `.env`. `.env.example` keeps a placeholder. The real value is not committed. Requests stay at about 5 per second.

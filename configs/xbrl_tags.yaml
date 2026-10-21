@@ -1,0 +1,42 @@
+# First matching tag wins. A later tag is reported as a tag change.
+# derive is used only when none of the tags are present for that period.
+metrics:
+  - name: revenue
+    kind: duration
+    tags:
+      - us-gaap:RevenueFromContractWithCustomerExcludingAssessedTax
+      - us-gaap:Revenues
+      - us-gaap:SalesRevenueNet
+  - name: cost_of_revenue
+    kind: duration
+    tags:
+      - us-gaap:CostOfRevenue
+      - us-gaap:CostOfGoodsAndServicesSold
+  - name: gross_profit
+    kind: duration
+    tags:
+      - us-gaap:GrossProfit
+    derive:
+      minuend: revenue
+      subtrahend: cost_of_revenue
+  - name: operating_income
+    kind: duration
+    tags:
+      - us-gaap:OperatingIncomeLoss
+  - name: net_income
+    kind: duration
+    tags:
+      - us-gaap:NetIncomeLoss
+      - us-gaap:ProfitLoss
+  - name: research_and_development
+    kind: duration
+    tags:
+      - us-gaap:ResearchAndDevelopmentExpense
+  - name: selling_general_and_administrative
+    kind: duration
+    tags:
+      - us-gaap:SellingGeneralAndAdministrativeExpense
+  - name: total_assets
+    kind: instant
+    tags:
+      - us-gaap:Assets

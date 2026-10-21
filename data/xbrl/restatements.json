@@ -1,0 +1,45 @@
+{
+  "restatements": [
+    {
+      "ticker": "AMD",
+      "metric": "selling_general_and_administrative",
+      "period_start": "2023-01-01",
+      "period_end": "2023-12-30",
+      "reports": [
+        {
+          "accession_number": "0000002488-26-000018",
+          "value": 2318000000,
+          "tag": "us-gaap:SellingGeneralAndAdministrativeExpense"
+        },
+        {
+          "accession_number": "0000002488-25-000012",
+          "value": 2352000000,
+          "tag": "us-gaap:SellingGeneralAndAdministrativeExpense"
+        },
+        {
+          "accession_number": "0000002488-24-000012",
+          "value": 2352000000,
+          "tag": "us-gaap:SellingGeneralAndAdministrativeExpense"
+        }
+      ]
+    },
+    {
+      "ticker": "AMD",
+      "metric": "selling_general_and_administrative",
+      "period_start": "2023-12-31",
+      "period_end": "2024-12-28",
+      "reports": [
+        {
+          "accession_number": "0000002488-26-000018",
+          "value": 2735000000,
+          "tag": "us-gaap:SellingGeneralAndAdministrativeExpense"
+        },
+        {
+          "accession_number": "0000002488-25-000012",
+          "value": 2783000000,
+          "tag": "us-gaap:SellingGeneralAndAdministrativeExpense"
+        }
+      ]
+    }
+  ]
+}
