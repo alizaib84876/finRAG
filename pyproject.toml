@@ -1,0 +1,31 @@
+[project]
+name = "finrag"
+version = "0.1.0"
+description = "Eval-gated hybrid RAG over SEC 10-K filings."
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = []
+
+[dependency-groups]
+dev = [
+    "black==26.10.0",
+    "psycopg[binary]>=3.2",
+    "pytest>=8.3",
+    "ruff==0.16.10",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.23,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff]
+line-length = 88
+target-version = "py312"
+src = ["src", "tests", "eval"]
+
+[tool.black]
+line-length = 88
+target-version = ["py312"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
