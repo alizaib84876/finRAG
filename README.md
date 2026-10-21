@@ -29,3 +29,19 @@ DATABASE_URL=postgresql://finrag:finrag@localhost:5432/finrag uv run pytest
 `.github/workflows/ci.yml` checks out the repo, installs uv 0.12.23 and Python 3.12, then runs ruff, `black --check`, and pytest.
 
 Code lives in `src/finrag`: ingest, XBRL, chunking, indexing, retrieval, the router, generation, and the API. `eval/` is the metric code. `data/` holds the manifest. `golden/` holds the questions. `configs/` holds the YAML for a run.
+
+## Corpus
+
+`configs/corpus.yaml` lists NVIDIA, AMD, Texas Instruments, Microchip, Qualcomm, and Broadcom by ticker. Only form 10-K is kept. 10-K/A is not.
+
+```
+uv run finrag-corpus fetch --dry-run
+uv run finrag-corpus fetch
+uv run finrag-corpus rebuild
+```
+
+`fetch --dry-run` prints company, form, period end, filing date, and URL, and does not save files. `fetch` writes `data/manifest.json` and the primary documents under `data/raw/`. A file already there with the same SHA-256 is left alone. `rebuild` reads the manifest, downloads anything missing, and checks every checksum.
+
+`period_end` is the SEC report date. The fiscal year label is the calendar year of that date. A January period end is marked ambiguous in the dry-run and in the manifest.
+
+Set `SEC_USER_AGENT` in `.env`. `.env.example` keeps a placeholder. The real value is not committed. Requests stay at about 5 per second.

@@ -1,0 +1,9 @@
+form: 10-K
+filings_per_company: 3
+companies:
+  - ticker: NVDA
+  - ticker: AMD
+  - ticker: TXN
+  - ticker: MCHP
+  - ticker: QCOM
+  - ticker: AVGO
